@@ -22,13 +22,17 @@ SYS / MDL to change a setting, and Enter / Back to navigate.
 
 In game:
 
+- Right stick: move -- push it forward to walk forward, sideways to strafe
 - Scroll wheel: turn left and right
-- Page Next: move forward
-- Page Prev: move backward
 - SYS: fire
 - Enter (wheel push): fire
 - MDL: next weapon
 - TELE: Open doors and use objects
+- Page Next: move forward
+- Page Prev: move backward
+
+The stick is proportional: a gentle push walks, a full push runs. It is
+centred at power-on, so don't hold it while the radio boots.
 
 Turn speed follows how fast the wheel is spun, and the mouse sensitivity slider
 in Doom's options menu scales it.

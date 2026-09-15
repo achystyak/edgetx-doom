@@ -63,9 +63,13 @@ typedef struct
     //    data2: X axis mouse movement (turn).
     //    data3: Y axis mouse movement (forward/backward).
     //    data4: Third axis mouse movement (strafe).
+    //           The axes run from -JOYAXIS_MAX to JOYAXIS_MAX.
 
     int data1, data2, data3, data4;
 } event_t;
+
+// Full deflection of a joystick axis carried by ev_joystick.
+#define JOYAXIS_MAX 32767
 
  
 //

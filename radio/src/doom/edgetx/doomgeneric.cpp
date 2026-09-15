@@ -6,6 +6,7 @@
 #include "stdio.h"
 
 #include "board.h"
+#include "d_event.h"
 #include "doomkeys.h"
 #include "doomtype.h"
 
@@ -76,6 +77,28 @@ static unsigned char inGameKey(unsigned char key) {
   }
 }
 
+// generalDefault() clears the stick calibration, and an axis with no
+// calibration reads full scale in one direction, which would walk the player
+// into the nearest wall for ever. Calibrate here instead of reading the
+// radio's own settings: the gimbal is spring centred and nobody can be holding
+// it this early, so whatever it reads now is the centre.
+//
+// The travel is an estimate. Being short only means the stick reaches full
+// speed before the end of its throw, which costs nothing -- Doom clamps
+// movement anyway. A stick that does not centre (the throttle, unused here)
+// just ends up centred wherever it was left.
+#define STICK_TRAVEL 600  // in anaIn() counts, which run 0..2047
+
+static void calibrateSticks() {
+  getADC();  // the mixer task is still paused, so nothing else is sampling
+
+  for (int i = 0; i < NUM_STICKS; i++) {
+    g_eeGeneral.calib[i].mid = anaIn(i);
+    g_eeGeneral.calib[i].spanPos = STICK_TRAVEL;
+    g_eeGeneral.calib[i].spanNeg = STICK_TRAVEL;
+  }
+}
+
 void dg_Create() {
   pwrOn();
 #if defined(SPORT_UPDATE_PWR_GPIO)
@@ -97,34 +120,50 @@ void dg_Create() {
   }
 #endif
   // loadRadioSettings();
+  calibrateSticks();
   resetBacklightTimeout();
   WDG_ENABLE(WDG_DURATION);
   startPulses();
   oldRotencValue = rotencValue;
 }
 
-int AD_RV = 0;
-int AD_RH = 0;
+int AD_RV = 0;  // right gimbal, vertical
+int AD_RH = 0;  // right gimbal, horizontal
 
-#define deadzone (32767 * 0.065)
+// Ignore this much slack around the centre, so a gimbal resting off centre
+// does not walk the player into a wall while nobody is touching it.
+#define STICK_DEADZONE (JOYAXIS_MAX / 12)
 
 int map_values(int x, int in_min, int in_max, int out_min, int out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+// CONVERT_MODE(2) and CONVERT_MODE(3) are the right gimbal's vertical and
+// horizontal axes whichever stick mode the radio is set to -- the same way the
+// main view picks out the right stick to draw. Both read positive when the
+// stick is pushed up or to the right.
+static int readStick(uint8_t axis) {
+  int value = map_values(calibratedAnalogs[CONVERT_MODE(axis)], -RESX, RESX,
+                         -JOYAXIS_MAX, JOYAXIS_MAX);
+
+  // Pick up from a standstill at the edge of the deadzone rather than jumping
+  // straight to a twelfth of full speed.
+  if (value > STICK_DEADZONE) {
+    return (value - STICK_DEADZONE) * JOYAXIS_MAX /
+           (JOYAXIS_MAX - STICK_DEADZONE);
+  }
+  if (value < -STICK_DEADZONE) {
+    return (value + STICK_DEADZONE) * JOYAXIS_MAX /
+           (JOYAXIS_MAX - STICK_DEADZONE);
+  }
+  return 0;
+}
+
 void button_update_loop() {
-  // getADC();
-  // evalInputs(e_perout_mode_notrainer);
-  // AD_RV = map_values(calibratedAnalogs[2], -RESX, RESX, -32767, 32767);
-  // AD_RH = map_values(calibratedAnalogs[3], -RESX, RESX, 32767, -32767);
-
-  // if (AD_RV < deadzone && AD_RV > -deadzone) {
-  //   AD_RV = 0;
-  // }
-
-  // if (AD_RH < deadzone && AD_RH > -deadzone) {
-  //   AD_RH = 0;
-  // }
+  // The mixer task keeps calibratedAnalogs up to date, so there is nothing to
+  // sample here.
+  AD_RV = readStick(2);
+  AD_RH = readStick(3);
 
   if (pwrPressed()) {
     boardOff();

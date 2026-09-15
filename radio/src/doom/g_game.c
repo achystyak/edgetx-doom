@@ -405,25 +405,25 @@ void G_BuildTiccmd (ticcmd_t* cmd, int maketic)
 	forward -= forwardmove[speed]; 
     }
 
-    if (joyymove < 0) 
-        forward += forwardmove[speed]; 
-    if (joyymove > 0) 
-        forward -= forwardmove[speed]; 
+    // The radio's gimbal is analog, so move by as much as it is pushed instead
+    // of treating any deflection as a full press, and let a full push run:
+    // nothing binds key_speed on the radio, so the keys below only ever walk.
+
+    forward -= (joyymove * forwardmove[1]) / JOYAXIS_MAX;
+    side += (joystrafemove * sidemove[1]) / JOYAXIS_MAX;
 
     if (gamekeydown[key_strafeleft]
      || joybuttons[joybstrafeleft]
-     || mousebuttons[mousebstrafeleft]
-     || joystrafemove < 0)
+     || mousebuttons[mousebstrafeleft])
     {
         side -= sidemove[speed];
     }
 
     if (gamekeydown[key_straferight]
      || joybuttons[joybstraferight]
-     || mousebuttons[mousebstraferight]
-     || joystrafemove > 0)
+     || mousebuttons[mousebstraferight])
     {
-        side += sidemove[speed]; 
+        side += sidemove[speed];
     }
 
     // buttons
