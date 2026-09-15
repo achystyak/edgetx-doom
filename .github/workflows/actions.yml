@@ -29,11 +29,13 @@ jobs:
           ls -la *.bin
 
       - name: Get DOOM1.WAD
-        continue-on-error: true
         run: |
           mkdir -p DOOM
-          wget -O DOOM/DOOM1.WAD https://wadhosting.com/Wad/Download/5B2E249B9C5133EC987B3EA77596381DC0D6BC1D/DOOM1.WAD
-
+          curl -fL -o DOOM/DOOM1.WAD \
+            "https://raw.githubusercontent.com/Doom-Utils/shareware-collection/master/Doom%201.9/doom1.wad"
+          echo "f0cefca49926d00903cf57551d901abe  DOOM/DOOM1.WAD" | md5sum -c -
+          ls -l DOOM
+          
       - name: Package firmware
         uses: actions/upload-artifact@v4
         with:
