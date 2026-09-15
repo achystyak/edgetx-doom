@@ -1,52 +1,43 @@
----
 name: Run tests and package firmware
 on:
   push:
     branches:
       - 'doom*'
-    paths-ignore:
-      - '**.md'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'companion/**'
-      - '.gitpod.yml'
-      - '.devcontainer/**'
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Run builds
+    name: Build tx16s
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target:
-          - tx16s
-    container:
-      image: ghcr.io/edgetx/edgetx-dev:2.9.0
-      volumes:
-        - ${{ github.workspace }}:/src
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build ${{ matrix.target }}
-        env:
-          FLAVOR: ${{ matrix.target }}
+      - name: Build firmware in old EdgeTX dev image
         run: |
-          echo "Running firmware build"
-          ./tools/build-gh.sh
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src -w /src \
+            -e FLAVOR=tx16s \
+            -e GITHUB_REF="$GITHUB_REF" \
+            -e GITHUB_SHA="$GITHUB_SHA" \
+            -e CMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            ghcr.io/edgetx/edgetx-dev:2.9.0 \
+            ./tools/build-gh.sh
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+          ls -la *.bin
 
-      - name: Compose release filename
+      - name: Get DOOM1.WAD
+        continue-on-error: true
         run: |
-          echo "artifact_name=doom_tx16s_fw" >> $GITHUB_ENV
-          wget https://wadhosting.com/Wad/Download/5B2E249B9C5133EC987B3EA77596381DC0D6BC1D/DOOM1.WAD
           mkdir -p DOOM
-          mv DOOM1.WAD DOOM/
+          wget -O DOOM/DOOM1.WAD https://wadhosting.com/Wad/Download/5B2E249B9C5133EC987B3EA77596381DC0D6BC1D/DOOM1.WAD
 
-      - name: Package firmware ${{ matrix.target }}
-        uses: 'actions/upload-artifact@v4'
+      - name: Package firmware
+        uses: actions/upload-artifact@v4
         with:
-          name: "${{ env.artifact_name }}"
+          name: doom_tx16s_fw
           path: |
             LICENSE
             *.bin
