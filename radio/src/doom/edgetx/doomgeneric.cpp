@@ -6,7 +6,6 @@
 #include "stdio.h"
 
 #include "board.h"
-#include "d_event.h"
 #include "doomkeys.h"
 #include "doomtype.h"
 
