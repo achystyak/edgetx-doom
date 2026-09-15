@@ -17,16 +17,24 @@ It should not change any settings on the radio or the SD Card, but it's still re
 
 ## Interaction
 
-In the menus, use Page Next / Page Prev and Enter / Back to navigate.
+In the menus, use the scroll wheel or Page Next / Page Prev to move the cursor,
+SYS / MDL to change a setting, and Enter / Back to navigate.
 
 In game:
 
+- Scroll wheel: turn left and right
 - Page Next: move forward
 - Page Prev: move backward
-- SYS: turn left
-- MDL: turn right
-- Enter: fire
+- SYS: fire
+- Enter (wheel push): fire
+- MDL: next weapon
 - TELE: Open doors and use objects
+
+Turn speed follows how fast the wheel is spun, and the mouse sensitivity slider
+in Doom's options menu scales it.
+
+Note that EdgeTX ignores the wheel while its push button is held, so use SYS to
+fire while turning.
 
 ## Build
 

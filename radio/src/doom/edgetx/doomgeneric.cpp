@@ -26,6 +26,53 @@ const uint8_t keyboardMap[] = {KEY_DOWNARROW,  KEY_UPARROW, KEY_ENTER,
 
 rotenc_t oldRotencValue;
 
+extern boolean menuactive;
+extern int key_nextweapon;
+
+// The scroll wheel turns the player. Its steps are injected as mouse movement
+// instead of left/right key presses: a key has to stay down for a whole tic to
+// turn at all, while mouse movement is summed into the next ticcmd, so turning
+// follows how far the wheel was spun rather than the frame rate.
+//
+// G_BuildTiccmd makes 8 units of angleturn out of one mouse unit and a full
+// circle is 65536 of angleturn, so this is 320 * 8 / 65536 * 360 = ~14 degrees
+// per detent, scaled by Doom's mouse sensitivity setting ((sens + 5) / 10).
+#define DOOM_TURN_PER_STEP 320
+
+// Half a circle in one frame. Keeps a fast spin from overflowing the signed
+// short angleturn field.
+#define DOOM_MAX_TURN_STEPS 12
+
+static int32_t rotencSteps;      // detents read but not handed to Doom yet
+static int32_t rotencRemainder;  // leftover below a full detent
+
+static void pollRotaryEncoder() {
+  rotenc_t value = rotencValue;
+  int32_t delta = (int32_t)(value - oldRotencValue) + rotencRemainder;
+  oldRotencValue = value;
+
+  rotencSteps += delta / ROTARY_ENCODER_GRANULARITY;
+  rotencRemainder = delta % ROTARY_ENCODER_GRANULARITY;
+
+  if (rotencSteps > DOOM_MAX_TURN_STEPS) {
+    rotencSteps = DOOM_MAX_TURN_STEPS;
+  } else if (rotencSteps < -DOOM_MAX_TURN_STEPS) {
+    rotencSteps = -DOOM_MAX_TURN_STEPS;
+  }
+}
+
+// There are only seven keys, so the menu keys double as controls once the menu
+// is closed. Left and right keep their menu meaning so the option sliders stay
+// usable.
+static unsigned char inGameKey(unsigned char key) {
+  switch (key) {
+    case KEY_ENTER:      return KEY_FIRE;  // scroll wheel push
+    case KEY_LEFTARROW:  return KEY_FIRE;  // SYS
+    case KEY_RIGHTARROW: return (unsigned char)key_nextweapon;  // MDL
+    default:             return key;
+  }
+}
+
 void dg_Create() {
   pwrOn();
 #if defined(SPORT_UPDATE_PWR_GPIO)
@@ -94,26 +141,49 @@ uint32_t DG_GetTicksMs() {
 }
 
 int DG_GetKey(int* pressed, unsigned char* key) {
-  extern boolean menuactive;
   static uint32_t oldKeys = 0;
+  static unsigned char sentKeys[sizeof(keyboardMap)] = {0};
+  static unsigned char scrollKey = 0;
+
+  pollRotaryEncoder();
+
+  // Release of the key synthesized for the previous menu scroll step.
+  if (scrollKey) {
+    *key = scrollKey;
+    *pressed = 0;
+    scrollKey = 0;
+    return 1;
+  }
+
+  // In the menus the wheel moves the cursor instead of turning.
+  if (menuactive && rotencSteps != 0) {
+    if (rotencSteps > 0) {
+      *key = KEY_DOWNARROW;
+      rotencSteps--;
+    } else {
+      *key = KEY_UPARROW;
+      rotencSteps++;
+    }
+    scrollKey = *key;
+    *pressed = 1;
+    return 1;
+  }
+
   auto keys = readKeys();
 
   for (auto i = 0; i < sizeof(keyboardMap); i++) {
     uint32_t k = 1 << i;
     if ((keys & k) && !(oldKeys & k)) {
-      *key = keyboardMap[i];
-      if (!menuactive && *key == KEY_ENTER) {
-        *key = KEY_FIRE;
-      }
+      // Remember what was sent: the menu may open or close while the key is
+      // held, and releasing under the other mapping would leave it stuck down.
+      sentKeys[i] = menuactive ? keyboardMap[i] : inGameKey(keyboardMap[i]);
+      *key = sentKeys[i];
       *pressed = 1;
       oldKeys |= k;
       return 1;
     }
     if (!(keys & k) && (oldKeys & k)) {
-      *key = keyboardMap[i];
-      if (!menuactive && *key == KEY_ENTER) {
-        *key = KEY_FIRE;
-      }
+      *key = sentKeys[i];
       *pressed = 0;
       oldKeys = oldKeys & (~k);
 
@@ -122,4 +192,14 @@ int DG_GetKey(int* pressed, unsigned char* key) {
   }
 
   return 0;
+}
+
+int DG_GetTurn() {
+  if (menuactive) {
+    return 0;  // the wheel is driving the menu cursor
+  }
+
+  int32_t steps = rotencSteps;
+  rotencSteps = 0;
+  return steps * DOOM_TURN_PER_STEP;
 }

@@ -324,6 +324,22 @@ void I_GetEvent(void)
     }
 
 
+    // The scroll wheel turns the player. It is reported as mouse movement so
+    // that a step turns by the same amount however many frames go by before it
+    // is read, and so that the turn is proportional to how fast it was spun.
+
+    int turn = DG_GetTurn();
+
+    if (turn != 0)
+    {
+        event.type = ev_mouse;
+        event.data1 = 0;     // no mouse buttons
+        event.data2 = turn;  // positive turns right
+        event.data3 = 0;
+
+        D_PostEvent(&event);
+    }
+
 	event_t ev;
 
     extern int AD_RV;
