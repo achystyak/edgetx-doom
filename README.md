@@ -22,7 +22,7 @@ SYS / MDL to change a setting, and Enter / Back to navigate.
 
 In game:
 
-- Right stick: move -- push it forward to walk forward, sideways to strafe
+- Right stick: push it forward to walk forward, sideways to turn
 - Scroll wheel: turn left and right
 - SYS: fire
 - Enter (wheel push): fire

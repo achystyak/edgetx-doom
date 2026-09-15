@@ -376,23 +376,20 @@ void G_BuildTiccmd (ticcmd_t* cmd, int maketic)
 	    //	fprintf(stderr, "strafe left\n");
 	    side -= sidemove[speed]; 
 	}
-	if (joyxmove > 0) 
-	    side += sidemove[speed]; 
-	if (joyxmove < 0) 
-	    side -= sidemove[speed]; 
- 
-    } 
+	side += (joyxmove * sidemove[1]) / JOYAXIS_MAX;
+    }
     else 
     { 
 	if (gamekeydown[key_right]) 
 	    cmd->angleturn -= angleturn[tspeed]; 
-	if (gamekeydown[key_left]) 
-	    cmd->angleturn += angleturn[tspeed]; 
-	if (joyxmove > 0) 
-	    cmd->angleturn -= angleturn[tspeed]; 
-	if (joyxmove < 0) 
-	    cmd->angleturn += angleturn[tspeed]; 
-    } 
+	if (gamekeydown[key_left])
+	    cmd->angleturn += angleturn[tspeed];
+
+	// The stick turns by as much as it is pushed, up to the rate the keys
+	// reach once they have been held long enough to speed up.
+
+	cmd->angleturn -= (joyxmove * angleturn[1]) / JOYAXIS_MAX;
+    }
  
     if (gamekeydown[key_up]) 
     {

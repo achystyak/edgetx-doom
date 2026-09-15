@@ -347,9 +347,9 @@ void I_GetEvent(void)
 
 	ev.type = ev_joystick;
     ev.data1 = 0;        // no joystick buttons
-    ev.data2 = 0;        // turning is the scroll wheel's job
+    ev.data2 = AD_RH;    // stick left and right turns, as the wheel does
 	ev.data3 = -AD_RV;   // stick pushed away from the player walks forward
-    ev.data4 = AD_RH;
+    ev.data4 = 0;
 
 	D_PostEvent(&ev);
 
