@@ -34,25 +34,28 @@ extern int key_nextweapon;
 // turn at all, while mouse movement is summed into the next ticcmd, so turning
 // follows how far the wheel was spun rather than the frame rate.
 //
+// Every count the encoder reports turns, so that a single click of the wheel
+// moves the view the way tapping a turn key would. Counts are not rounded up
+// into whole detents first: EdgeTX's own navigation does that (dividing by
+// ROTARY_ENCODER_GRANULARITY), but a click of this wheel is a single count, so
+// rounding would swallow it and turning would take two clicks.
+//
 // G_BuildTiccmd makes 8 units of angleturn out of one mouse unit and a full
-// circle is 65536 of angleturn, so this is 320 * 8 / 65536 * 360 = ~14 degrees
-// per detent, scaled by Doom's mouse sensitivity setting ((sens + 5) / 10).
-#define DOOM_TURN_PER_STEP 320
+// circle is 65536 of angleturn, so this is 160 * 8 / 65536 * 360 = ~7 degrees
+// per click -- the same as one tic of Doom's own fast keyboard turn -- scaled
+// by the mouse sensitivity setting ((sens + 5) / 10).
+#define DOOM_TURN_PER_STEP 160
 
-// Half a circle in one frame. Keeps a fast spin from overflowing the signed
-// short angleturn field.
-#define DOOM_MAX_TURN_STEPS 12
+// Roughly half a circle in one frame. Keeps a fast spin from overflowing the
+// signed short angleturn field.
+#define DOOM_MAX_TURN_STEPS 24
 
-static int32_t rotencSteps;      // detents read but not handed to Doom yet
-static int32_t rotencRemainder;  // leftover below a full detent
+static int32_t rotencSteps;  // counts read but not handed to Doom yet
 
 static void pollRotaryEncoder() {
   rotenc_t value = rotencValue;
-  int32_t delta = (int32_t)(value - oldRotencValue) + rotencRemainder;
+  rotencSteps += (int32_t)(value - oldRotencValue);
   oldRotencValue = value;
-
-  rotencSteps += delta / ROTARY_ENCODER_GRANULARITY;
-  rotencRemainder = delta % ROTARY_ENCODER_GRANULARITY;
 
   if (rotencSteps > DOOM_MAX_TURN_STEPS) {
     rotencSteps = DOOM_MAX_TURN_STEPS;
