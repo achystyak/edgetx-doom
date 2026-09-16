@@ -14,66 +14,89 @@
 #include <unistd.h>
 #endif
 
+// The radio's keys, in the order readKeys() reports them. EdgeTX names them
+// too, but its KEY_ENTER and Doom's are different numbers, so the enum here
+// avoids having to mention them.
+enum RadioKey {
+  RADIO_PAGE_PREV,
+  RADIO_PAGE_NEXT,
+  RADIO_WHEEL,  // the scroll wheel's push
+  RADIO_MDL,
+  RADIO_RTN,
+  RADIO_TELE,
+  RADIO_SYS,
+};
+
+// What the keys do with a menu open: between them they can work any of it.
 #ifdef SIMU
 const uint8_t keyboardMap[] = {KEY_ESCAPE,   KEY_USE,       KEY_ENTER,
                                KEY_UPARROW,  KEY_DOWNARROW, KEY_RIGHTARROW,
                                KEY_LEFTARROW};
 #else
-const uint8_t keyboardMap[] = {KEY_DOWNARROW,  KEY_UPARROW, KEY_ENTER,
-                               KEY_RIGHTARROW, KEY_ESCAPE,  KEY_USE,
-                               KEY_LEFTARROW};
+const uint8_t keyboardMap[] = {KEY_DOWNARROW,   // PAGE<
+                               KEY_UPARROW,     // PAGE>
+                               KEY_ENTER,       // wheel push
+                               KEY_RIGHTARROW,  // MDL
+                               KEY_ESCAPE,      // RTN
+                               KEY_ESCAPE,      // TELE
+                               KEY_LEFTARROW};  // SYS
 #endif
 
 rotenc_t oldRotencValue;
 
 extern boolean menuactive;
+extern int key_prevweapon;
 extern int key_nextweapon;
 
-// The scroll wheel turns the player. Its steps are injected as mouse movement
-// instead of left/right key presses: a key has to stay down for a whole tic to
-// turn at all, while mouse movement is summed into the next ticcmd, so turning
-// follows how far the wheel was spun rather than the frame rate.
+// The scroll wheel steps the player sideways. A click becomes a short burst of
+// strafing rather than a single tic of it, which would barely show; spinning
+// the wheel faster stacks the bursts up into a continuous sidestep.
 //
-// Every count the encoder reports turns, so that a single click of the wheel
-// moves the view the way tapping a turn key would. Counts are not rounded up
-// into whole detents first: EdgeTX's own navigation does that (dividing by
+// Every count the encoder reports is a step. Counts are not rounded up into
+// whole detents first: EdgeTX's own navigation does that (dividing by
 // ROTARY_ENCODER_GRANULARITY), but a click of this wheel is a single count, so
-// rounding would swallow it and turning would take two clicks.
-//
-// G_BuildTiccmd makes 8 units of angleturn out of one mouse unit and a full
-// circle is 65536 of angleturn, so this is 160 * 8 / 65536 * 360 = ~7 degrees
-// per click -- the same as one tic of Doom's own fast keyboard turn -- scaled
-// by the mouse sensitivity setting ((sens + 5) / 10).
-#define DOOM_TURN_PER_STEP 160
+// rounding would swallow it and stepping would take two clicks.
+#define DOOM_STRAFE_TICS_PER_STEP 3
 
-// Roughly half a circle in one frame. Keeps a fast spin from overflowing the
-// signed short angleturn field.
-#define DOOM_MAX_TURN_STEPS 24
+// Two thirds of a second of strafing still owed. Keeps a fast spin from
+// running on long after the wheel has stopped.
+#define DOOM_MAX_STRAFE_TICS 24
 
-static int32_t rotencSteps;  // counts read but not handed to Doom yet
+static int32_t rotencSteps;  // counts read but not acted on yet
+static int32_t strafeTics;   // tics of strafing still to send, + is right
 
 static void pollRotaryEncoder() {
   rotenc_t value = rotencValue;
   rotencSteps += (int32_t)(value - oldRotencValue);
   oldRotencValue = value;
 
-  if (rotencSteps > DOOM_MAX_TURN_STEPS) {
-    rotencSteps = DOOM_MAX_TURN_STEPS;
-  } else if (rotencSteps < -DOOM_MAX_TURN_STEPS) {
-    rotencSteps = -DOOM_MAX_TURN_STEPS;
+  const int32_t maxSteps = DOOM_MAX_STRAFE_TICS / DOOM_STRAFE_TICS_PER_STEP;
+
+  if (rotencSteps > maxSteps) {
+    rotencSteps = maxSteps;
+  } else if (rotencSteps < -maxSteps) {
+    rotencSteps = -maxSteps;
   }
 }
 
-// There are only seven keys, so the menu keys double as controls once the menu
-// is closed. Left and right keep their menu meaning so the option sliders stay
-// usable.
-static unsigned char inGameKey(unsigned char key) {
-  switch (key) {
-    case KEY_ENTER:      return KEY_FIRE;  // scroll wheel push
-    case KEY_LEFTARROW:  return KEY_FIRE;  // SYS
-    case KEY_RIGHTARROW: return (unsigned char)key_nextweapon;  // MDL
-    default:             return key;
+// There are only seven keys, so each one does something else once the menu is
+// closed and it is no longer needed to work it.
+static unsigned char inGameKey(int radioKey) {
+#ifdef SIMU
+  // The simulator has a whole keyboard, so only the menu key doubles up.
+  return keyboardMap[radioKey] == KEY_ENTER ? KEY_FIRE : keyboardMap[radioKey];
+#else
+  switch (radioKey) {
+    case RADIO_PAGE_PREV: return (unsigned char)key_prevweapon;
+    case RADIO_PAGE_NEXT: return (unsigned char)key_nextweapon;
+    case RADIO_WHEEL:     return KEY_FIRE;
+    case RADIO_MDL:       return (unsigned char)key_nextweapon;
+    case RADIO_RTN:       return KEY_USE;
+    case RADIO_TELE:      return KEY_ESCAPE;  // opens the menu
+    case RADIO_SYS:       return KEY_FIRE;
+    default:              return keyboardMap[radioKey];
   }
+#endif
 }
 
 // generalDefault() clears the stick calibration, and an axis with no
@@ -196,7 +219,7 @@ int DG_GetKey(int* pressed, unsigned char* key) {
     return 1;
   }
 
-  // In the menus the wheel moves the cursor instead of turning.
+  // In the menus the wheel moves the cursor instead of stepping.
   if (menuactive && rotencSteps != 0) {
     if (rotencSteps > 0) {
       *key = KEY_DOWNARROW;
@@ -217,7 +240,7 @@ int DG_GetKey(int* pressed, unsigned char* key) {
     if ((keys & k) && !(oldKeys & k)) {
       // Remember what was sent: the menu may open or close while the key is
       // held, and releasing under the other mapping would leave it stuck down.
-      sentKeys[i] = menuactive ? keyboardMap[i] : inGameKey(keyboardMap[i]);
+      sentKeys[i] = menuactive ? keyboardMap[i] : inGameKey(i);
       *key = sentKeys[i];
       *pressed = 1;
       oldKeys |= k;
@@ -235,12 +258,36 @@ int DG_GetKey(int* pressed, unsigned char* key) {
   return 0;
 }
 
-int DG_GetTurn() {
+// Called once per tic, so the burst a click owes is paid out one tic at a
+// time.
+int DG_GetStrafe() {
   if (menuactive) {
-    return 0;  // the wheel is driving the menu cursor
+    strafeTics = 0;  // the wheel is driving the menu cursor
+    return 0;
   }
 
-  int32_t steps = rotencSteps;
-  rotencSteps = 0;
-  return steps * DOOM_TURN_PER_STEP;
+  if (rotencSteps != 0) {
+    int32_t tics = rotencSteps * DOOM_STRAFE_TICS_PER_STEP;
+    rotencSteps = 0;
+
+    // Turning the wheel back the other way cancels what is left of the step
+    // it interrupted rather than being queued up behind it.
+    strafeTics = ((tics > 0) == (strafeTics > 0)) ? strafeTics + tics : tics;
+
+    if (strafeTics > DOOM_MAX_STRAFE_TICS) {
+      strafeTics = DOOM_MAX_STRAFE_TICS;
+    } else if (strafeTics < -DOOM_MAX_STRAFE_TICS) {
+      strafeTics = -DOOM_MAX_STRAFE_TICS;
+    }
+  }
+
+  if (strafeTics > 0) {
+    strafeTics--;
+    return JOYAXIS_MAX;
+  }
+  if (strafeTics < 0) {
+    strafeTics++;
+    return -JOYAXIS_MAX;
+  }
+  return 0;
 }

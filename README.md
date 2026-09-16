@@ -18,27 +18,26 @@ It should not change any settings on the radio or the SD Card, but it's still re
 ## Interaction
 
 In the menus, use the scroll wheel or Page Next / Page Prev to move the cursor,
-SYS / MDL to change a setting, and Enter / Back to navigate.
+SYS / MDL to change a setting, the wheel push to select, and RTN or TELE to go
+back.
 
 In game:
 
 - Right stick: push it forward to walk forward, sideways to turn
-- Scroll wheel: turn left and right
+- Scroll wheel: step left and right
 - SYS: fire
-- Enter (wheel push): fire
+- Wheel push: fire
+- RTN: open doors and use objects
+- TELE: main menu
+- Page Next: next weapon
+- Page Prev: previous weapon
 - MDL: next weapon
-- TELE: Open doors and use objects
-- Page Next: move forward
-- Page Prev: move backward
 
 The stick is proportional: a gentle push walks, a full push runs. It is
 centred at power-on, so don't hold it while the radio boots.
 
-Turn speed follows how fast the wheel is spun, and the mouse sensitivity slider
-in Doom's options menu scales it.
-
 Note that EdgeTX ignores the wheel while its push button is held, so use SYS to
-fire while turning.
+fire while stepping.
 
 ## Build
 
